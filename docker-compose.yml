@@ -1,0 +1,17 @@
+# SQL Server for local development only.
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    # The image is x86-64 only. On Apple Silicon, Docker Desktop runs it under emulation.
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env (see .env.example)}
+    ports:
+      # Bound to localhost so the database is not reachable from the network.
+      - "127.0.0.1:1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+
+volumes:
+  sqlserver-data:

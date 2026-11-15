@@ -1,0 +1,47 @@
+.transfer-list {
+  list-style: none;
+  padding: 0;
+  margin: 1.25rem 0 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.transfer-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.transfer-item.inactive {
+  opacity: 0.6;
+}
+
+.transfer-info {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.transfer-name {
+  overflow-wrap: anywhere;
+}
+
+.transfer-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.transfer-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+button.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}

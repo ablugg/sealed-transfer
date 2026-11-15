@@ -1,0 +1,41 @@
+<section class="card" aria-labelledby="transfers-heading">
+  <h1 id="transfers-heading">My transfers</h1>
+  <p>Files you sent from this browser. This list is stored locally and not shared with the server.</p>
+
+  @if (error(); as message) {
+    <p class="hint error" role="alert">{{ message }}</p>
+  }
+
+  @if (hasItems()) {
+    <ul class="transfer-list">
+      @for (item of items(); track item.id) {
+        <li class="transfer-item" [class.inactive]="item.revoked || isExpired(item)">
+          <div class="transfer-info">
+            <strong class="transfer-name">{{ item.fileName }}</strong>
+            <span class="transfer-meta">{{ fileSize(item) }} · {{ status(item) }}</span>
+            <span class="transfer-meta">Created {{ item.createdAt | date: 'medium' }}</span>
+            @if (!item.revoked && !isExpired(item)) {
+              <span class="transfer-meta">Expires {{ item.expiresAt | date: 'medium' }}</span>
+            }
+          </div>
+          <div class="transfer-actions">
+            @if (!item.revoked && !isExpired(item)) {
+              <button type="button" (click)="copyLink(item)">Copy link</button>
+              <button type="button" class="danger" [disabled]="revokingId() === item.id" (click)="revoke(item)">
+                {{ revokingId() === item.id ? 'Revoking…' : 'Revoke' }}
+              </button>
+            } @else {
+              <button type="button" (click)="removeFromList(item)">Remove</button>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  } @else {
+    <p class="hint">No transfers yet. <a routerLink="/">Send a file</a> to get started.</p>
+  }
+
+  <div class="actions">
+    <a class="button primary" routerLink="/">Send a file</a>
+  </div>
+</section>

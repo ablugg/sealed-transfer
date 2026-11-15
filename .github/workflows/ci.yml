@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The workflow only needs to read the repository.
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API build and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore SealedTransfer.slnx
+      - run: dotnet build SealedTransfer.slnx --no-restore -warnaserror
+      - run: dotnet test SealedTransfer.slnx --no-build
+
+  web:
+    name: Web build and tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx ng build
+      - run: npx ng test --watch=false

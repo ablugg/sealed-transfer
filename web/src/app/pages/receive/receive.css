@@ -1,0 +1,15 @@
+.details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.5rem 1.25rem;
+  margin: 1.25rem 0;
+}
+
+.details dt {
+  color: var(--muted);
+}
+
+.details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

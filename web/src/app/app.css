@@ -1,0 +1,52 @@
+:host {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+}
+
+.site-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-weight: 650;
+  font-size: 1.1rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.tagline,
+.site-footer {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.site-nav {
+  margin-left: auto;
+}
+
+.site-nav a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.site-nav a:hover {
+  text-decoration: underline;
+}
+
+main {
+  width: min(36rem, 100% - 2rem);
+  margin: 2.5rem auto;
+}
+
+.site-footer {
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}

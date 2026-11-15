@@ -1,0 +1,74 @@
+<section class="card" aria-labelledby="receive-heading">
+  @switch (stage()) {
+    @case ('opening') {
+      <h1 id="receive-heading">Opening transfer…</h1>
+    }
+    @case ('password') {
+      <h1 id="receive-heading">This file is password-protected</h1>
+      <p>The sender set a password on this transfer. Enter it below to decrypt the file.</p>
+
+      <label class="field">
+        <span>Password</span>
+        <input
+          type="password"
+          autocomplete="off"
+          [ngModel]="password()"
+          (ngModelChange)="password.set($event)"
+          (keydown.enter)="unlock()"
+        />
+      </label>
+
+      @if (error(); as message) {
+        <p class="hint error" role="alert">{{ message }}</p>
+      }
+
+      <div class="actions">
+        <button type="button" class="primary" [disabled]="!password() || unlocking()" (click)="unlock()">
+          {{ unlocking() ? 'Unlocking…' : 'Unlock' }}
+        </button>
+      </div>
+    }
+    @case ('failed') {
+      <h1 id="receive-heading">This file can't be opened</h1>
+      <p class="hint error" role="alert">{{ error() }}</p>
+      <div class="actions">
+        <a class="button" routerLink="/">Send a file</a>
+      </div>
+    }
+    @default {
+      @if (opened(); as transfer) {
+        <h1 id="receive-heading">A file was shared with you</h1>
+        <dl class="details">
+          <dt>Name</dt>
+          <dd>{{ transfer.metadata.name }}</dd>
+          <dt>Size</dt>
+          <dd>{{ fileSize() }}</dd>
+          <dt>Available until</dt>
+          <dd>{{ transfer.info.expiresAt | date: 'medium' }}</dd>
+          @if (transfer.info.downloadsRemaining !== null) {
+            <dt>Downloads left</dt>
+            <dd>{{ transfer.info.downloadsRemaining }}</dd>
+          }
+        </dl>
+
+        @if (stage() === 'downloading') {
+          <div class="progress">
+            <progress [value]="progress()" max="1" aria-label="Download progress"></progress>
+            <span>Downloading and decrypting… {{ progress() | percent }}</span>
+          </div>
+        }
+
+        @if (stage() === 'saved') {
+          <p class="hint">Decrypted and saved. Check your downloads folder.</p>
+        } @else {
+          <p class="hint">The file is decrypted in your browser. Only open files from people you trust.</p>
+          <div class="actions">
+            <button type="button" class="primary" [disabled]="stage() === 'downloading'" (click)="download()">
+              Download and decrypt
+            </button>
+          </div>
+        }
+      }
+    }
+  }
+</section>

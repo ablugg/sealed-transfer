@@ -1,0 +1,16 @@
+# .NET
+bin/
+obj/
+*.user
+App_Data/
+
+# Angular
+web/node_modules/
+web/dist/
+web/.angular/
+
+# Local secrets and editor files
+.env
+.vs/
+.idea/
+.DS_Store

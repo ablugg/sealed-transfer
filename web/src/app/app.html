@@ -1,0 +1,13 @@
+<header class="site-header">
+  <a class="brand" routerLink="/">Sealed Transfer</a>
+  <span class="tagline">Encrypted in your browser</span>
+  <nav class="site-nav">
+    <a routerLink="/transfers">My transfers</a>
+  </nav>
+</header>
+
+<main>
+  <router-outlet />
+</main>
+
+<footer class="site-footer">Files are encrypted with AES-256-GCM before upload. The server stores only ciphertext.</footer>

@@ -1,0 +1,9 @@
+.link {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+button.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}

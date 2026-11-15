@@ -1,0 +1,105 @@
+@if (stage() === 'done' && sent(); as transfer) {
+  <section class="card" aria-labelledby="done-heading">
+    @if (revoked()) {
+      <h1 id="done-heading">Transfer revoked</h1>
+      <p>The file has been deleted from the server. The link will no longer work.</p>
+    } @else {
+      <h1 id="done-heading">Your file is ready to share</h1>
+      <p>
+        Anyone with this link can download and decrypt the file until
+        {{ transfer.expiresAt | date: 'medium' }}. The key is the part after the #, and it never reaches our server.
+      </p>
+
+      <label class="field">
+        <span>Share link</span>
+        <input class="link" type="text" readonly [value]="link()" (focus)="$any($event.target).select()" />
+      </label>
+    }
+
+    @if (error(); as message) {
+      <p class="hint error" role="alert">{{ message }}</p>
+    }
+
+    <div class="actions">
+      @if (!revoked()) {
+        <button type="button" class="primary" (click)="copyLink()">{{ copied() ? 'Copied' : 'Copy link' }}</button>
+        <button type="button" class="danger" [disabled]="revoking()" (click)="revoke()">
+          {{ revoking() ? 'Revoking…' : 'Revoke' }}
+        </button>
+      }
+      <button type="button" (click)="reset()">Send another file</button>
+      <a class="button" routerLink="/transfers">My transfers</a>
+    </div>
+  </section>
+} @else {
+  <section class="card" aria-labelledby="send-heading">
+    <h1 id="send-heading">Send a file</h1>
+    <p>The file is encrypted in your browser before it is uploaded. Only people you give the link to can read it.</p>
+
+    <label class="field">
+      <span>File</span>
+      <input type="file" (change)="onFileSelected($event)" [disabled]="stage() === 'sending'" />
+    </label>
+
+    @if (file(); as selected) {
+      <p class="hint" [class.error]="tooLarge()">
+        {{ selected.name }} · {{ fileSize() }}
+        @if (tooLarge()) {
+          · larger than the 200 MB limit
+        }
+      </p>
+    }
+
+    <label class="field">
+      <span>Link expires after</span>
+      <select [formField]="optionsForm.expiresInHours">
+        <option value="1">1 hour</option>
+        <option value="24">1 day</option>
+        <option value="168">7 days</option>
+      </select>
+    </label>
+
+    <label class="check">
+      <input type="checkbox" [formField]="optionsForm.limitDownloads" />
+      <span>Limit the number of downloads</span>
+    </label>
+
+    @if (options().limitDownloads) {
+      <label class="field">
+        <span>Downloads allowed</span>
+        <input type="number" [formField]="optionsForm.maxDownloads" />
+      </label>
+      @for (problem of optionsForm.maxDownloads().errors(); track problem.kind) {
+        <p class="hint error">{{ problem.message }}</p>
+      }
+    }
+
+    <label class="check">
+      <input type="checkbox" [formField]="optionsForm.usePassword" />
+      <span>Protect with a password</span>
+    </label>
+
+    @if (options().usePassword) {
+      <label class="field">
+        <span>Password</span>
+        <input type="password" [formField]="optionsForm.password" autocomplete="off" />
+      </label>
+      <p class="hint">The recipient will need this password in addition to the link.</p>
+    }
+
+    @if (stage() === 'sending') {
+      <div class="progress">
+        <progress [value]="progress()" max="1" aria-label="Upload progress"></progress>
+        <span>Encrypting and uploading… {{ progress() | percent }}</span>
+      </div>
+    }
+
+    @if (error(); as message) {
+      <p class="hint error" role="alert">{{ message }}</p>
+    }
+
+    <div class="actions">
+      <button type="button" class="primary" [disabled]="!canSend()" (click)="send()">Encrypt and upload</button>
+    </div>
+  </section>
+}
