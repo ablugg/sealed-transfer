@@ -17,9 +17,20 @@ builder.Services.AddSingleton<IDownloadTokenService, DataProtectionDownloadToken
 builder.Services.AddScoped<TransferService>();
 builder.Services.AddHostedService<ExpiredTransferCleanupService>();
 
+// Railway provides DATABASE_URL as a postgres:// URI. Convert it to an Npgsql connection string.
+// Locally, use ConnectionStrings:SealedTransfer via user secrets.
 var connectionString = builder.Configuration.GetConnectionString("SealedTransfer")
+    ?? ConvertDatabaseUrl(Environment.GetEnvironmentVariable("DATABASE_URL"))
     ?? throw new InvalidOperationException(
-        "Connection string 'SealedTransfer' is not set. See the README for how to set it with user secrets.");
+        "Connection string 'SealedTransfer' is not set. Set it with user secrets or provide DATABASE_URL.");
+
+static string? ConvertDatabaseUrl(string? url)
+{
+    if (string.IsNullOrEmpty(url)) return null;
+    var uri = new Uri(url);
+    var userInfo = uri.UserInfo.Split(':');
+    return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+}
 var blobRoot = builder.Configuration["Storage:RootPath"]
     ?? Path.Combine(builder.Environment.ContentRootPath, "App_Data", "blobs");
 builder.Services.AddInfrastructure(connectionString, blobRoot);
