@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { fromBase64Url, toBase64Url } from './base64url';
 import {
   DecryptionError,
