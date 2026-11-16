@@ -174,7 +174,7 @@ jobs:
         run: dotnet tool install --global CycloneDX
 
       - name: Generate .NET SBOM
-        run: dotnet CycloneDX src/SealedTransfer.Api/SealedTransfer.Api.csproj -o sbom -fn sbom-dotnet.json -j
+        run: dotnet CycloneDX src/SealedTransfer.Api/SealedTransfer.Api.csproj -o sbom -fn sbom-dotnet.json --json
 
       - name: Generate npm SBOM
         run: |
