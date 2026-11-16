@@ -7,7 +7,8 @@ public sealed record CreateTransferCommand(
     long CiphertextBytes,
     int ExpiresInHours,
     int? MaxDownloads,
-    bool PasswordProtected = false);
+    bool PasswordProtected = false,
+    Guid? UserId = null);
 
 /// <summary>Returned once, when the transfer is created. The owner token cannot be recovered later.</summary>
 public sealed record CreatedTransfer(Guid Id, string OwnerToken, DateTimeOffset ExpiresAt);

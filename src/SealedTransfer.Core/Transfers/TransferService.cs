@@ -38,7 +38,8 @@ public sealed class TransferService(
             now,
             TimeSpan.FromHours(command.ExpiresInHours),
             command.MaxDownloads,
-            command.PasswordProtected);
+            command.PasswordProtected,
+            command.UserId);
 
         await repository.AddAsync(transfer, cancellationToken);
         repository.AddAuditEvent(AuditEvent.Create(transfer.Id, AuditEventType.Created, now));

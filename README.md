@@ -5,8 +5,9 @@ the recipient's browser after download, so the server only ever stores ciphertex
 
 - **Front end:** Angular 22, TypeScript, signals, Signal Forms, Vitest
 - **API:** ASP.NET Core 10 (minimal APIs), C#
-- **Data:** SQL Server through EF Core 10; encrypted chunks on local disk (Azure Blob Storage later)
+- **Data:** PostgreSQL through EF Core 10; encrypted chunks on local disk
 - **Crypto:** WebCrypto only: HKDF-SHA-256 and AES-256-GCM in a chunked STREAM construction
+- **CI:** GitHub Actions — build, test, CodeQL SAST, Trivy container scan, CycloneDX SBOMs
 
 "Sealed Transfer" is a working name.
 
@@ -15,13 +16,13 @@ the recipient's browser after download, so the server only ever stores ciphertex
 Link-mode sharing, end to end:
 
 1. Pick a file, an expiry (1 hour, 1 day or 7 days) and an optional download limit.
-2. The browser encrypts the file in 1 MiB chunks and uploads them.
+2. The browser validates the file (magic-byte and extension checks), encrypts it in 1 MiB chunks and uploads.
 3. You get a link of the form `/t/{id}#{key}`. The key after `#` is never sent to the server.
 4. The recipient opens the link. The key is removed from the address bar, the file name and size are
    decrypted and shown, and one click downloads and decrypts the file.
 
 On the server: expiry and download limits, owner tokens for upload and revoke, an audit trail, a background
-job that deletes expired transfers, and rate limiting on transfer creation.
+job that deletes expired transfers, rate limiting on transfer creation, strict CSP and SRI on all pages.
 
 ## How it works
 
@@ -39,11 +40,12 @@ and the limits of the design are in [`docs/threat-model.md`](docs/threat-model.m
 
 | Project | Role |
 | --- | --- |
-| `src/SealedTransfer.Core` | Domain model and rules. No dependencies, so it is fully unit-tested. |
-| `src/SealedTransfer.Infrastructure` | EF Core for SQL Server, and the file-system blob store. |
+| `src/SealedTransfer.Core` | Domain model and rules. No dependencies, fully unit-tested. |
+| `src/SealedTransfer.Infrastructure` | EF Core for PostgreSQL, and the file-system blob store. |
 | `src/SealedTransfer.Api` | HTTP endpoints, download tokens, cleanup job, rate limiting. |
 | `tests/SealedTransfer.Tests` | xUnit tests for the domain model and the transfer service. |
-| `web` | The Angular app. |
+| `tests/SealedTransfer.IntegrationTests` | API integration tests (WebApplicationFactory + InMemory EF). |
+| `web` | The Angular app, including Playwright e2e tests. |
 
 ### API
 
@@ -59,42 +61,32 @@ and the limits of the design are in [`docs/threat-model.md`](docs/threat-model.m
 
 ## Run it locally
 
-You need the .NET 10 SDK, Node 22 and Docker.
+You need the .NET 10 SDK (preview), Node 22 and Docker.
 
-**1. Start SQL Server**
+**1. Start PostgreSQL**
 
 ```bash
-cp .env.example .env        # then set MSSQL_SA_PASSWORD in .env
 docker compose up -d
 ```
+
+The default password is in `docker-compose.yml`. Override it with `POSTGRES_PASSWORD` in a `.env` file.
 
 **2. Give the API its connection string.** It is kept in user secrets, outside the repository.
 
 ```bash
 cd src/SealedTransfer.Api
 dotnet user-secrets set "ConnectionStrings:SealedTransfer" \
-  "Server=localhost,1433;Database=SealedTransfer;User Id=sa;Password=<the password from .env>;TrustServerCertificate=True"
+  "Host=localhost;Port=5432;Database=sealedtransfer;Username=sealed;Password=SealedTr4nsfer_2026"
 cd ../..
 ```
 
-**3. Create the database.** No migration is checked in yet; creating the first one is the first task of
-milestone 2.
-
-```bash
-dotnet tool install --global dotnet-ef
-dotnet ef migrations add InitialCreate \
-  --project src/SealedTransfer.Infrastructure --startup-project src/SealedTransfer.Api
-dotnet ef database update \
-  --project src/SealedTransfer.Infrastructure --startup-project src/SealedTransfer.Api
-```
-
-**4. Run the API** on http://localhost:5181
+**3. Run the API** on http://localhost:5181. Migrations run automatically on startup.
 
 ```bash
 dotnet run --project src/SealedTransfer.Api
 ```
 
-**5. Run the web app** on http://localhost:4200. The dev server proxies `/api` to the API.
+**4. Run the web app** on http://localhost:4200. The dev server proxies `/api` to the API.
 
 ```bash
 cd web
@@ -105,40 +97,29 @@ npm start
 ## Tests
 
 ```bash
-dotnet test                         # domain model and transfer service
-cd web && npx ng test --watch=false # crypto module, including tampering cases
+# .NET unit + integration tests
+dotnet test
+
+# Angular / crypto unit tests (Vitest)
+cd web && npx vitest run
+
+# Playwright e2e (requires API + Angular running, or use the auto-start config)
+cd web && npx playwright test
 ```
-
-## What has and has not been verified
-
-This first version was built in a sandbox that could not reach NuGet, so parts of it have not been compiled
-yet. Treat the "not yet" rows as the first things to check on your machine.
-
-| Part | Status |
-| --- | --- |
-| Angular app: production build, 22 crypto tests | Built and passing |
-| Core library: compiled with warnings as errors | Passing |
-| The 34 C# test cases | Passing, run through a small stand-in for xUnit |
-| API endpoints, tokens, cleanup job, file store | Compiled and run against an in-memory repository |
-| Full flow in headless Chrome: send, inspect stored bytes, receive, compare, limit reached | Passing |
-| EF Core code (`SealedTransferDbContext`, `EfTransferRepository`, `AddInfrastructure`) | Not yet compiled or run |
-| OpenAPI registration, NuGet package versions, the real xUnit runner | Not yet restored or run |
-| Behaviour against a real SQL Server, including the concurrency retry | Not yet run |
-| The GitHub Actions workflow | Not yet run |
 
 ## Roadmap
 
 | # | Milestone | Status |
 | --- | --- | --- |
 | 1 | Project structure and link-mode sharing | Done |
-| 2 | Run locally: SQL Server in Docker, first EF Core migration | Next |
-| 3 | Revoke button, "my transfers" list, password mode | |
-| 4 | Upload checks (magic bytes, size) and page lockdown (CSP, SRI) | |
-| 5 | API integration tests and Playwright end-to-end tests | |
-| 6 | Entra ID sign-in, organizations, roles | |
+| 2 | Run locally: PostgreSQL in Docker, EF Core migration | Done |
+| 3 | Revoke button, "my transfers" list, password mode | Done |
+| 4 | Upload checks (magic bytes, size) and page lockdown (CSP, SRI) | Done |
+| 5 | API integration tests and Playwright end-to-end tests | Done |
+| 6 | Auth0 sign-in, organizations, roles | Next |
 | 7 | Audit log search and admin dashboard | |
-| 8 | Azure deployment with Terraform | |
-| 9 | Security pipeline: SAST, dependency scanning, SBOM, signed images, actions pinned by commit | |
+| 8 | Railway deployment | Done |
+| 9 | Security pipeline: SAST, dependency scanning, SBOM, signed images, actions pinned by commit | Done |
 | 10 | Registered recipients (ECDH) and recovery codes | |
 
 ## Known limits of version 1

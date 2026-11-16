@@ -1,7 +1,12 @@
+using System.Security.Claims;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using SealedTransfer.Api.Identity;
 using SealedTransfer.Api.Transfers;
+using SealedTransfer.Core.Identity;
 using SealedTransfer.Core.Transfers;
 using SealedTransfer.Infrastructure;
 using SealedTransfer.Infrastructure.Persistence;
@@ -15,7 +20,33 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddDataProtection();
 builder.Services.AddSingleton<IDownloadTokenService, DataProtectionDownloadTokenService>();
 builder.Services.AddScoped<TransferService>();
+builder.Services.AddScoped<UserSyncService>();
 builder.Services.AddHostedService<ExpiredTransferCleanupService>();
+
+// Auth0 authentication — enabled only when Auth0:Domain is configured.
+// When disabled, all endpoints remain accessible anonymously.
+var auth0Domain = builder.Configuration["Auth0:Domain"];
+var auth0Audience = builder.Configuration["Auth0:Audience"];
+var authConfigured = !string.IsNullOrEmpty(auth0Domain);
+if (authConfigured)
+{
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.Authority = $"https://{auth0Domain}/";
+            options.Audience = auth0Audience;
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                NameClaimType = ClaimTypes.NameIdentifier,
+            };
+        });
+    builder.Services.AddAuthorization();
+}
+else
+{
+    builder.Services.AddAuthentication();
+    builder.Services.AddAuthorization();
+}
 
 // Railway provides DATABASE_URL as a postgres:// URI. Convert it to an Npgsql connection string.
 // Locally, use ConnectionStrings:SealedTransfer via user secrets.
@@ -62,8 +93,10 @@ if (port is not null)
 var app = builder.Build();
 
 // Auto-apply pending migrations on startup so Railway deploys just work.
-using (var scope = app.Services.CreateScope())
+// Integration tests set SkipMigrations=true and use EnsureCreated instead.
+if (!string.Equals(app.Configuration["SkipMigrations"], "true", StringComparison.OrdinalIgnoreCase))
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<SealedTransferDbContext>();
     await db.Database.MigrateAsync();
 }
@@ -71,13 +104,15 @@ using (var scope = app.Services.CreateScope())
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-// Security headers for API responses.
+// Security headers.
 app.Use(async (context, next) =>
 {
     var headers = context.Response.Headers;
     headers.XContentTypeOptions = "nosniff";
     headers["Referrer-Policy"] = "no-referrer";
-    // Don't set restrictive CSP or Cache-Control on static files.
+    headers["X-Frame-Options"] = "DENY";
+    headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+
     if (context.Request.Path.StartsWithSegments("/api"))
     {
         headers.ContentSecurityPolicy = "default-src 'none'; frame-ancestors 'none'";
@@ -86,6 +121,32 @@ app.Use(async (context, next) =>
     await next(context);
 });
 
+// Strict CSP for the SPA HTML. Static JS/CSS assets are covered by SRI hashes
+// that Angular embeds in the HTML at build time, so we can use 'strict-dynamic'
+// to trust scripts loaded by the inline bootstrap without listing hashes here.
+// The 'unsafe-inline' is ignored by browsers that support 'strict-dynamic'.
+app.Use(async (context, next) =>
+{
+    await next(context);
+
+    // Only add the SPA CSP to HTML responses (index.html / fallback).
+    if (context.Response.ContentType?.StartsWith("text/html", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        context.Response.Headers.ContentSecurityPolicy =
+            "default-src 'none'; " +
+            "script-src 'self' 'unsafe-inline'; " +
+            "style-src 'self' 'unsafe-inline'; " +
+            "connect-src 'self'; " +
+            "img-src 'self' data:; " +
+            "font-src 'self'; " +
+            "base-uri 'self'; " +
+            "form-action 'none'; " +
+            "frame-ancestors 'none'";
+    }
+});
+
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
@@ -98,6 +159,7 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.MapTransferEndpoints();
+app.MapIdentityEndpoints();
 
 // SPA fallback: any non-API, non-file request serves index.html so Angular routing works.
 app.MapFallbackToFile("index.html");

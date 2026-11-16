@@ -4,6 +4,7 @@ import { FormField, disabled, form, max, min } from '@angular/forms/signals';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { describeError, formatBytes } from '../../transfers/format';
+import { checkFile } from '../../transfers/file-check';
 import { TransferApi } from '../../transfers/transfer-api';
 import { MAX_FILE_BYTES, SentTransfer, TransferClient } from '../../transfers/transfer-client';
 import { TransferStore } from '../../transfers/transfer-store';
@@ -55,10 +56,11 @@ export class Send {
     disabled(path.password, { when: ({ valueOf }) => !valueOf(path.usePassword) });
   });
 
+  protected readonly blocked = signal<string | null>(null);
   protected readonly fileSize = computed(() => formatBytes(this.file()?.size ?? 0));
   protected readonly tooLarge = computed(() => (this.file()?.size ?? 0) > MAX_FILE_BYTES);
   protected readonly canSend = computed(
-    () => this.file() !== null && !this.tooLarge() && this.stage() !== 'sending' && this.optionsForm().valid(),
+    () => this.file() !== null && !this.tooLarge() && !this.blocked() && this.stage() !== 'sending' && this.optionsForm().valid(),
   );
 
   protected readonly link = computed(() => {
@@ -66,10 +68,19 @@ export class Send {
     return sent ? `${this.document.location.origin}/t/${sent.id}#${sent.secret}` : '';
   });
 
-  protected onFileSelected(event: Event): void {
+  protected async onFileSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
-    this.file.set(input.files?.item(0) ?? null);
+    const file = input.files?.item(0) ?? null;
+    this.file.set(file);
     this.error.set(null);
+    this.blocked.set(null);
+
+    if (file) {
+      const result = await checkFile(file);
+      if (!result.allowed) {
+        this.blocked.set(result.reason ?? 'This file type is not allowed.');
+      }
+    }
   }
 
   protected async send(): Promise<void> {
@@ -140,5 +151,6 @@ export class Send {
     this.stage.set('idle');
     this.revoked.set(false);
     this.revoking.set(false);
+    this.blocked.set(null);
   }
 }

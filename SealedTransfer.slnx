@@ -5,6 +5,7 @@
     <Project Path="src/SealedTransfer.Infrastructure/SealedTransfer.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/SealedTransfer.IntegrationTests/SealedTransfer.IntegrationTests.csproj" />
     <Project Path="tests/SealedTransfer.Tests/SealedTransfer.Tests.csproj" />
   </Folder>
 </Solution>

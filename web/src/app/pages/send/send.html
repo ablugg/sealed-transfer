@@ -42,10 +42,13 @@
     </label>
 
     @if (file(); as selected) {
-      <p class="hint" [class.error]="tooLarge()">
+      <p class="hint" [class.error]="tooLarge() || blocked()">
         {{ selected.name }} · {{ fileSize() }}
         @if (tooLarge()) {
           · larger than the 200 MB limit
+        }
+        @if (blocked(); as reason) {
+          · {{ reason }}
         }
       </p>
     }

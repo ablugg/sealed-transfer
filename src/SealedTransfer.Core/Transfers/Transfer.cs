@@ -46,6 +46,9 @@ public sealed class Transfer
 
     public DateTimeOffset ExpiresAt { get; private set; }
 
+    /// <summary>The Entra ID object id of the user who created this transfer, or null for anonymous.</summary>
+    public Guid? CreatedByUserId { get; private set; }
+
     /// <summary>Null means unlimited downloads until expiry.</summary>
     public int? MaxDownloads { get; private set; }
 
@@ -54,8 +57,8 @@ public sealed class Transfer
     /// <summary>True when the sender chose password protection. The server never sees the password.</summary>
     public bool PasswordProtected { get; private set; }
 
-    /// <summary>Optimistic concurrency token, so two simultaneous downloads cannot both take the last slot.</summary>
-    public byte[] RowVersion { get; private set; } = [];
+    /// <summary>Optimistic concurrency token (PostgreSQL xmin), so two simultaneous downloads cannot both take the last slot.</summary>
+    public uint RowVersion { get; private set; }
 
     public int? DownloadsRemaining =>
         MaxDownloads is null ? null : Math.Max(0, MaxDownloads.Value - DownloadCount);
@@ -70,7 +73,8 @@ public sealed class Transfer
         DateTimeOffset now,
         TimeSpan lifetime,
         int? maxDownloads,
-        bool passwordProtected = false)
+        bool passwordProtected = false,
+        Guid? createdByUserId = null)
     {
         ArgumentNullException.ThrowIfNull(cryptoHeader);
         ArgumentNullException.ThrowIfNull(encryptedMetadata);
@@ -113,6 +117,7 @@ public sealed class Transfer
             ExpiresAt = now + lifetime,
             MaxDownloads = maxDownloads,
             PasswordProtected = passwordProtected,
+            CreatedByUserId = createdByUserId,
         };
     }
 

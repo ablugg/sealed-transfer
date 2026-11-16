@@ -45,7 +45,7 @@ namespace SealedTransfer.Infrastructure.Migrations
                     MaxDownloads = table.Column<int>(type: "integer", nullable: true),
                     DownloadCount = table.Column<int>(type: "integer", nullable: false),
                     PasswordProtected = table.Column<bool>(type: "boolean", nullable: false),
-                    RowVersion = table.Column<byte[]>(type: "bytea", rowVersion: true, nullable: false)
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)
                 },
                 constraints: table =>
                 {

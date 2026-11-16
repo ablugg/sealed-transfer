@@ -14,8 +14,9 @@ Status: first draft for version 1 (link-mode sharing, no accounts). Extend it wi
 ## Trust boundaries
 
 1. **Browser to API.** The API receives ciphertext, a 12-byte public header, and counts and sizes. It never receives a key.
-2. **API to storage.** SQL Server and the blob store hold only what the API holds.
-3. **Static host to browser.** The browser trusts the JavaScript it is served. This is the weakest boundary (see limit 1).
+2. **API to storage.** PostgreSQL and the blob store hold only what the API holds.
+3. **Browser to identity provider.** Auth0 tokens are validated server-side; the API never sees or stores passwords.
+4. **Static host to browser.** The browser trusts the JavaScript it is served. This is the weakest boundary (see limit 1).
 
 ## What the design defends against
 
@@ -26,14 +27,15 @@ Status: first draft for version 1 (link-mode sharing, no accounts). Extend it wi
 | Ciphertext from one transfer replayed into another | Each file has its own random secret and nonce prefix |
 | Someone other than the sender uploads to, completes or revokes a transfer | 256-bit owner token, stored hashed, compared in constant time |
 | Download limit bypassed by racing requests | Optimistic concurrency on the transfer row; the limit is re-checked after a conflict |
+| Unauthorized transfer creation | Optional Auth0 sign-in; when configured, the API validates JWT bearer tokens from Auth0 |
 | Oversized or malformed uploads exhaust storage | Declared size capped, each chunk capped, bytes counted while streaming, creation rate-limited |
 | Key leaks through the address bar, history or Referer header | Key is removed from the URL on load; no-referrer policy on the page and the API |
 | Path traversal through storage keys | Blob paths are built only from a GUID and an integer |
 
 ## Known limits
 
-1. **The server delivers the JavaScript.** Whoever controls the static host can serve code that leaks keys. Planned: strict Content Security Policy, Subresource Integrity, a separate origin for the front end, signed build provenance. Not fully removable in a web app.
-2. **No server-side malware scanning.** The server cannot read files. Planned: magic-byte and size checks before encryption, verified senders, report-and-takedown.
+1. **The server delivers the JavaScript.** Whoever controls the static host can serve code that leaks keys. Done: strict Content Security Policy on HTML responses, Subresource Integrity on all scripts and styles. Planned: a separate origin for the front end, signed build provenance. Not fully removable in a web app.
+2. **No server-side malware scanning.** The server cannot read files. Done: client-side magic-byte validation and blocked-extension list before encryption. Planned: verified senders, report-and-takedown.
 3. **Anyone holding the link can decrypt.** Mitigated by expiry, download limits and revoke. Planned: password mode, emailed one-time codes, registered recipients with key pairs.
 4. **Losing the link means losing the file.** Accepted for link mode.
 5. **The server learns metadata it needs to operate:** approximate file size, upload and download times, and client IP addresses.

@@ -3,6 +3,14 @@
   <span class="tagline">Encrypted in your browser</span>
   <nav class="site-nav">
     <a routerLink="/transfers">My transfers</a>
+    @if (auth.enabled) {
+      @if (auth.isAuthenticated()) {
+        <span class="user-info">{{ auth.displayName() ?? 'Signed in' }}</span>
+        <button class="sign-out-btn" (click)="auth.signOut()">Sign out</button>
+      } @else {
+        <button class="sign-in-btn" (click)="auth.signIn()">Sign in</button>
+      }
+    }
   </nav>
 </header>
 

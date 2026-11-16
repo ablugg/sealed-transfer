@@ -1,4 +1,5 @@
 using System.Buffers.Text;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using SealedTransfer.Core.Transfers;
 
@@ -29,6 +30,7 @@ public static class TransferEndpoints
 
     private static async Task<IResult> CreateAsync(
         CreateTransferRequest request,
+        HttpContext httpContext,
         TransferService service,
         CancellationToken cancellationToken)
     {
@@ -36,6 +38,17 @@ public static class TransferEndpoints
             || !TryDecode(request.EncryptedMetadata, Transfer.MaxEncryptedMetadataBytes, out var metadata))
         {
             return Problem(TransferError.Invalid, "cryptoHeader and encryptedMetadata must be base64url within the size limits.");
+        }
+
+        // Link the transfer to the signed-in user if authenticated.
+        Guid? userId = null;
+        var sub = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
+                  ?? httpContext.User.FindFirstValue("sub");
+        if (!string.IsNullOrEmpty(sub))
+        {
+            // Auth0 sub is "provider|id" — derive a stable GUID the same way IdentityEndpoints does.
+            var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sub));
+            userId = new Guid(hash.AsSpan(0, 16));
         }
 
         var result = await service.CreateAsync(
@@ -46,7 +59,8 @@ public static class TransferEndpoints
                 request.CiphertextBytes,
                 request.ExpiresInHours,
                 request.MaxDownloads,
-                request.PasswordProtected),
+                request.PasswordProtected,
+                userId),
             cancellationToken);
 
         if (!result.IsSuccess)

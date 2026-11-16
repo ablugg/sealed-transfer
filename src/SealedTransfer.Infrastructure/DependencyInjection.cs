@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SealedTransfer.Core.Identity;
 using SealedTransfer.Core.Transfers;
 using SealedTransfer.Infrastructure.Persistence;
 using SealedTransfer.Infrastructure.Storage;
@@ -15,6 +16,7 @@ public static class DependencyInjection
     {
         services.AddDbContext<SealedTransferDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<ITransferRepository, EfTransferRepository>();
+        services.AddScoped<IUserRepository, EfUserRepository>();
         services.AddSingleton<IBlobStore>(new FileSystemBlobStore(blobRootPath));
         return services;
     }

@@ -4,37 +4,187 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
 
-# The workflow only needs to read the repository.
 permissions:
   contents: read
 
 jobs:
-  api:
-    name: API build and tests
+  # ── .NET: build, test, check for vulnerable packages ──
+  dotnet:
+    name: .NET build and tests
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - run: dotnet restore SealedTransfer.slnx
-      - run: dotnet build SealedTransfer.slnx --no-restore -warnaserror
-      - run: dotnet test SealedTransfer.slnx --no-build
 
-  web:
-    name: Web build and tests
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --warnaserror
+
+      - name: Unit and integration tests
+        run: dotnet test --no-build --logger "console;verbosity=normal"
+
+      - name: Check for vulnerable NuGet packages
+        run: |
+          dotnet list package --vulnerable --include-transitive 2>&1 | tee vuln-report.txt
+          if grep -q "has the following vulnerable packages" vuln-report.txt; then
+            echo "::warning::Vulnerable NuGet packages detected — review the log above."
+          fi
+
+  # ── Angular: build, unit tests, dependency audit ──
+  angular:
+    name: Angular build and tests
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: web
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - run: npx ng build
-      - run: npx ng test --watch=false
+
+      - name: Install
+        run: npm ci
+
+      - name: Build (production, with SRI)
+        run: npx ng build --configuration production
+
+      - name: Unit tests (Vitest)
+        run: npx vitest run
+
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high || true
+
+  # ── Playwright end-to-end tests ──
+  e2e:
+    name: Playwright e2e
+    runs-on: ubuntu-latest
+    needs: [dotnet, angular]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: sealed
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: sealedtransfer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U sealed -d sealedtransfer"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build API
+        run: dotnet build src/SealedTransfer.Api/SealedTransfer.Api.csproj
+
+      - name: Install Angular dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=list
+        working-directory: web
+        env:
+          CI: "true"
+          ConnectionStrings__SealedTransfer: "Host=localhost;Port=5432;Database=sealedtransfer;Username=sealed;Password=testpassword"
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report
+          path: web/test-results/
+
+  # ── Docker: build image and scan with Trivy ──
+  docker:
+    name: Docker build and scan
+    runs-on: ubuntu-latest
+    needs: [dotnet, angular]
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Build Docker image
+        run: docker build -t sealed-transfer:ci .
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: sealed-transfer:ci
+          format: table
+          exit-code: 0
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+  # ── SBOM generation ──
+  sbom:
+    name: Generate SBOMs
+    runs-on: ubuntu-latest
+    needs: [dotnet, angular]
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install CycloneDX .NET tool
+        run: dotnet tool install --global CycloneDX
+
+      - name: Generate .NET SBOM
+        run: dotnet CycloneDX src/SealedTransfer.Api/SealedTransfer.Api.csproj -o sbom -fn sbom-dotnet.json -j
+
+      - name: Generate npm SBOM
+        run: |
+          cd web
+          npm ci
+          npx @cyclonedx/cyclonedx-npm --output-file ../sbom/sbom-npm.json || npm sbom --sbom-format cyclonedx > ../sbom/sbom-npm.json 2>/dev/null || true
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sboms
+          path: sbom/
+          if-no-files-found: ignore
