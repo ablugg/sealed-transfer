@@ -18,6 +18,7 @@ public sealed class SealedTransferFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Development");
         builder.UseSetting("Storage:RootPath", _blobRoot);
         builder.UseSetting("SkipMigrations", "true");
+        builder.UseSetting("ConnectionStrings:SealedTransfer", "Host=localhost;Database=fake");
 
         builder.ConfigureServices(services =>
         {
